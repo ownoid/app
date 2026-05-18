@@ -30,3 +30,9 @@ export async function sendMagicLink(formData: FormData) {
 
   redirect('/login?sent=true');
 }
+
+export async function signOut() {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  redirect('/login');
+}
