@@ -12,11 +12,16 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Success: redirect to the originally requested page (default: home)
       return NextResponse.redirect(`${origin}${next}`);
     }
+
+    // Surface the actual Supabase error for debugging
+    return NextResponse.redirect(
+      `${origin}/auth/auth-code-error?reason=${encodeURIComponent(error.message)}`
+    );
   }
 
-  // Failure: redirect to an error page (we'll build this in Step 4)
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  return NextResponse.redirect(
+    `${origin}/auth/auth-code-error?reason=no_code_in_url`
+  );
 }
