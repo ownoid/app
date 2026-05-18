@@ -66,12 +66,19 @@ export default function CreateForm() {
       )}
 
       {imageUrl && !isLoading && (
-        <div>
+        <div className="flex flex-col gap-4">
           <img
             src={imageUrl}
             alt="Generated humanoid"
             className="w-full rounded-lg border border-gray-800"
           />
+          <button
+            onClick={handleGenerate}
+            disabled={!prompt.trim() || isLoading}
+            className="rounded-lg border border-gray-700 bg-transparent text-white px-6 py-3 font-semibold hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            Generate again
+          </button>
         </div>
       )}
     </div>
