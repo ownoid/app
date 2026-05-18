@@ -113,8 +113,28 @@ export async function POST(request: NextRequest) {
       Array.isArray(prediction.output) &&
       prediction.output.length > 0
     ) {
+      const imageUrl = prediction.output[0]
+
+      // 5. Save the generation to the database (best-effort).
+      // RLS policy "Users can insert own generations" requires user_id === auth.uid(),
+      // which is automatically satisfied because we use the server client with the user's session.
+      const { error: insertError } = await supabase
+        .from('generations')
+        .insert({
+          user_id: user.id,
+          prompt,
+          image_url: imageUrl,
+          prediction_id: prediction.id,
+        })
+
+      if (insertError) {
+        // We don't fail the request — the image was already generated and paid for.
+        // The user still gets their image; the missing row will show up in logs only.
+        console.error('Failed to save generation to DB:', insertError)
+      }
+
       return NextResponse.json({
-        imageUrl: prediction.output[0],
+        imageUrl,
         predictionId: prediction.id,
       })
     }
