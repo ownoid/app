@@ -2,6 +2,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import CreateForm from './CreateForm'
 
+export const metadata = {
+  title: 'Create — Ownoid',
+  description: 'Design your humanoid with AI.',
+}
+
 export default async function CreatePage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
