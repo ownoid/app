@@ -10,7 +10,7 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center px-6 py-12">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-black px-6 py-12">
       <div className="w-full max-w-md space-y-10 text-center">
         <div>
           <h1 className="text-6xl font-bold tracking-tight text-white">
