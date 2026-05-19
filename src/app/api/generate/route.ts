@@ -5,11 +5,13 @@ import { createClient } from '@/lib/supabase/server'
 // (we use process.env.REPLICATE_API_TOKEN, which is server-only)
 export const runtime = 'nodejs'
 
-// Shape of the Replicate prediction response we care about
+// Shape of the Replicate prediction response we care about.
+// flux-1.1-pro returns `output` as a single string URL;
+// flux-schnell returned it as a string[]. We accept both defensively.
 type ReplicatePrediction = {
   id: string
   status: 'starting' | 'processing' | 'succeeded' | 'failed' | 'canceled'
-  output: string[] | null
+  output: string | string[] | null
   error: string | null
 }
 
@@ -70,10 +72,11 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // 4. Call Replicate (flux-schnell) in sync mode via the `Prefer: wait` header
+  // 4. Call Replicate (flux-1.1-pro) in sync mode via the `Prefer: wait` header.
+  // Note: flux-1.1-pro does NOT accept `num_outputs` — it always generates one image.
   try {
     const replicateResponse = await fetch(
-      'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions',
+      'https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions',
       {
         method: 'POST',
         headers: {
@@ -85,7 +88,6 @@ export async function POST(request: NextRequest) {
           input: {
             prompt,
             aspect_ratio: '1:1',
-            num_outputs: 1,
             output_format: 'webp',
             output_quality: 90,
           },
@@ -108,13 +110,20 @@ export async function POST(request: NextRequest) {
 
     const prediction = (await replicateResponse.json()) as ReplicatePrediction
 
-    if (
-      prediction.status === 'succeeded' &&
+    // Normalize output: flux-1.1-pro returns string, flux-schnell returned string[].
+    // Accept either form so the code stays robust if we swap models again.
+    let imageUrl: string | null = null
+    if (typeof prediction.output === 'string' && prediction.output.length > 0) {
+      imageUrl = prediction.output
+    } else if (
       Array.isArray(prediction.output) &&
-      prediction.output.length > 0
+      prediction.output.length > 0 &&
+      typeof prediction.output[0] === 'string'
     ) {
-      const imageUrl = prediction.output[0]
+      imageUrl = prediction.output[0]
+    }
 
+    if (prediction.status === 'succeeded' && imageUrl) {
       // 5. Save the generation to the database (best-effort).
       // RLS policy "Users can insert own generations" requires user_id === auth.uid(),
       // which is automatically satisfied because we use the server client with the user's session.
@@ -147,7 +156,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Still processing after the `Prefer: wait` timeout — rare for flux-schnell
+    // Still processing after the `Prefer: wait` timeout — possible for flux-1.1-pro (4–5s)
     return NextResponse.json(
       {
         error: 'Image generation is taking too long. Please try again.',
