@@ -111,39 +111,74 @@ export async function POST(request: NextRequest) {
     const prediction = (await replicateResponse.json()) as ReplicatePrediction
 
     // Normalize output: flux-1.1-pro returns string, flux-schnell returned string[].
-    // Accept either form so the code stays robust if we swap models again.
-    let imageUrl: string | null = null
+    let replicateImageUrl: string | null = null
     if (typeof prediction.output === 'string' && prediction.output.length > 0) {
-      imageUrl = prediction.output
+      replicateImageUrl = prediction.output
     } else if (
       Array.isArray(prediction.output) &&
       prediction.output.length > 0 &&
       typeof prediction.output[0] === 'string'
     ) {
-      imageUrl = prediction.output[0]
+      replicateImageUrl = prediction.output[0]
     }
 
-    if (prediction.status === 'succeeded' && imageUrl) {
-      // 5. Save the generation to the database (best-effort).
-      // RLS policy "Users can insert own generations" requires user_id === auth.uid(),
-      // which is automatically satisfied because we use the server client with the user's session.
+    if (prediction.status === 'succeeded' && replicateImageUrl) {
+      // 5. Download the image from Replicate (URL expires in 1 hour — must persist it now).
+      const imageResponse = await fetch(replicateImageUrl)
+      if (!imageResponse.ok) {
+        console.error(
+          'Failed to download image from Replicate:',
+          imageResponse.status
+        )
+        return NextResponse.json(
+          { error: 'Failed to save generated image. Please try again.' },
+          { status: 502 }
+        )
+      }
+      const imageArrayBuffer = await imageResponse.arrayBuffer()
+
+      // 6. Upload to Supabase Storage at <user_id>/<prediction_id>.webp
+      // RLS policy "Users can upload to their own folder" requires the first folder
+      // segment to equal auth.uid()::text — automatically satisfied by the server client.
+      const filePath = `${user.id}/${prediction.id}.webp`
+      const { error: uploadError } = await supabase.storage
+        .from('generations')
+        .upload(filePath, imageArrayBuffer, {
+          contentType: 'image/webp',
+          upsert: false,
+        })
+
+      if (uploadError) {
+        console.error('Failed to upload image to Storage:', uploadError)
+        return NextResponse.json(
+          { error: 'Failed to save generated image. Please try again.' },
+          { status: 502 }
+        )
+      }
+
+      // 7. Get the permanent public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('generations')
+        .getPublicUrl(filePath)
+      const permanentImageUrl = publicUrlData.publicUrl
+
+      // 8. Save the generation to the database with the PERMANENT URL (not Replicate's).
+      // Best-effort: if DB insert fails, the image is already uploaded — log and continue.
       const { error: insertError } = await supabase
         .from('generations')
         .insert({
           user_id: user.id,
           prompt,
-          image_url: imageUrl,
+          image_url: permanentImageUrl,
           prediction_id: prediction.id,
         })
 
       if (insertError) {
-        // We don't fail the request — the image was already generated and paid for.
-        // The user still gets their image; the missing row will show up in logs only.
         console.error('Failed to save generation to DB:', insertError)
       }
 
       return NextResponse.json({
-        imageUrl,
+        imageUrl: permanentImageUrl,
         predictionId: prediction.id,
       })
     }
