@@ -4,10 +4,11 @@ import { sendMagicLink, signInWithGoogle } from './actions';
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { sent?: string; error?: string };
+  searchParams: { sent?: string; error?: string; next?: string };
 }) {
   const sent = searchParams.sent === 'true';
   const errorMessage = searchParams.error;
+  const next = searchParams.next ?? '/create';
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
@@ -34,6 +35,7 @@ export default function LoginPage({
             )}
 
             <form action={signInWithGoogle}>
+              <input type="hidden" name="next" value={next} />
               <button
                 type="submit"
                 className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2"
@@ -58,6 +60,7 @@ export default function LoginPage({
             </div>
 
             <form action={sendMagicLink} className="space-y-4">
+              <input type="hidden" name="next" value={next} />
               <div>
                 <label
                   htmlFor="email"
