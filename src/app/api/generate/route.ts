@@ -30,10 +30,14 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // 2. Parse and validate the prompt
+  // 2. Parse and validate the body (prompt + optional character_id)
   let prompt: string
+  let rawCharacterId: unknown
   try {
-    const body = (await request.json()) as { prompt?: unknown }
+    const body = (await request.json()) as {
+      prompt?: unknown
+      character_id?: unknown
+    }
     if (typeof body.prompt !== 'string') {
       return NextResponse.json(
         { error: 'Prompt is required.' },
@@ -41,6 +45,7 @@ export async function POST(request: NextRequest) {
       )
     }
     prompt = body.prompt.trim()
+    rawCharacterId = body.character_id
   } catch {
     return NextResponse.json(
       { error: 'Invalid request body.' },
@@ -60,6 +65,47 @@ export async function POST(request: NextRequest) {
       { error: 'Prompt is too long (max 500 characters).' },
       { status: 400 }
     )
+  }
+
+  // 2b. Validate character_id if provided.
+  // Optional: undefined or null means "no character". If provided, must be
+  // a string AND belong to the current user (RLS auto-filters non-owned rows).
+  let characterId: string | null = null
+  if (rawCharacterId !== undefined && rawCharacterId !== null) {
+    if (typeof rawCharacterId !== 'string') {
+      return NextResponse.json(
+        { error: 'Invalid character.' },
+        { status: 400 }
+      )
+    }
+
+    const { data: characterRow, error: characterLookupError } = await supabase
+      .from('characters')
+      .select('id')
+      .eq('id', rawCharacterId)
+      .maybeSingle()
+
+    if (characterLookupError) {
+      console.error('Character lookup failed:', characterLookupError)
+      return NextResponse.json(
+        { error: 'Failed to verify character. Please try again.' },
+        { status: 500 }
+      )
+    }
+
+    if (!characterRow) {
+      // Row not found OR belongs to another user — RLS filters either way.
+      // Treat both as "no longer available" from this user's perspective.
+      return NextResponse.json(
+        {
+          error:
+            'The selected character is no longer available. Please refresh and try again.',
+        },
+        { status: 400 }
+      )
+    }
+
+    characterId = rawCharacterId
   }
 
   // 3. Check that the Replicate token is configured
@@ -171,6 +217,7 @@ export async function POST(request: NextRequest) {
           prompt,
           image_url: permanentImageUrl,
           prediction_id: prediction.id,
+          character_id: characterId,
         })
 
       if (insertError) {
