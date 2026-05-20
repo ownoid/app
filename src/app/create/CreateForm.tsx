@@ -1,9 +1,20 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 
-export default function CreateForm() {
+export type Character = {
+  id: string
+  name: string
+}
+
+type Props = {
+  characters: Character[]
+}
+
+export default function CreateForm({ characters }: Props) {
   const [prompt, setPrompt] = useState('')
+  const [characterId, setCharacterId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,6 +48,36 @@ export default function CreateForm() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Character selection */}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="character" className="text-sm text-gray-400">
+          Character
+        </label>
+        {characters.length === 0 ? (
+          <Link
+            href="/characters/new?next=/create"
+            className="text-sm text-gray-500 hover:text-gray-300 transition"
+          >
+            No characters yet. Create one for consistent variations →
+          </Link>
+        ) : (
+          <select
+            id="character"
+            value={characterId ?? ''}
+            onChange={(e) => setCharacterId(e.target.value || null)}
+            disabled={isLoading}
+            className="rounded-lg bg-gray-900 border border-gray-700 p-3 text-white focus:outline-none focus:border-gray-500 disabled:opacity-50"
+          >
+            <option value="">No character (default)</option>
+            {characters.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
