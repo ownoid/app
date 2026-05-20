@@ -6,18 +6,39 @@ import Link from 'next/link'
 export type Character = {
   id: string
   name: string
+  distinctive_traits: Array<{ label: string; value: string }>
 }
 
 type Props = {
   characters: Character[]
 }
 
+function buildPrompt(
+  userPrompt: string,
+  traits: Array<{ label: string; value: string }>,
+): string {
+  if (traits.length === 0) return userPrompt
+  const traitStr = traits.map((t) => `${t.label}: ${t.value}`).join(', ')
+  return `${traitStr}. ${userPrompt}`
+}
+
 export default function CreateForm({ characters }: Props) {
   const [prompt, setPrompt] = useState('')
   const [characterId, setCharacterId] = useState<string | null>(null)
+  const [includeTraits, setIncludeTraits] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const selectedChar = characterId
+    ? characters.find((c) => c.id === characterId) ?? null
+    : null
+  const hasTraits = (selectedChar?.distinctive_traits.length ?? 0) > 0
+  const willPrepend = includeTraits && hasTraits
+  const effectivePrompt =
+    willPrepend && selectedChar
+      ? buildPrompt(prompt, selectedChar.distinctive_traits)
+      : prompt
 
   async function handleGenerate() {
     setIsLoading(true)
@@ -28,7 +49,7 @@ export default function CreateForm({ characters }: Props) {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt: effectivePrompt }),
       })
 
       const data = await res.json()
@@ -78,6 +99,20 @@ export default function CreateForm({ characters }: Props) {
         )}
       </div>
 
+      {/* Traits toggle — only shows when a character WITH traits is selected */}
+      {selectedChar && hasTraits && (
+        <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={includeTraits}
+            onChange={(e) => setIncludeTraits(e.target.checked)}
+            disabled={isLoading}
+            className="rounded border-gray-700 bg-gray-900"
+          />
+          Include character traits in prompt
+        </label>
+      )}
+
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -86,6 +121,19 @@ export default function CreateForm({ characters }: Props) {
         disabled={isLoading}
         className="w-full rounded-lg bg-gray-900 border border-gray-700 p-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 resize-none disabled:opacity-50"
       />
+
+      {/* Prompt preview — only when traits will actually be prepended */}
+      {willPrepend && prompt.trim() && (
+        <div className="rounded-lg border border-gray-800 bg-gray-950 p-4">
+          <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+            Final prompt sent to AI
+          </div>
+          <div className="text-sm text-gray-300 whitespace-pre-wrap break-words">
+            {effectivePrompt}
+          </div>
+        </div>
+      )}
+
       <button
         onClick={handleGenerate}
         disabled={!prompt.trim() || isLoading}
