@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import CreateForm from './CreateForm'
+import CreateForm, { type Character } from './CreateForm'
 
 export const metadata = {
   title: 'Create — Ownoid',
@@ -12,8 +12,15 @@ export default async function CreatePage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    redirect('/login')
+    redirect('/login?next=/create')
   }
+
+  const { data: charactersData } = await supabase
+    .from('characters')
+    .select('id, name')
+    .order('updated_at', { ascending: false })
+
+  const characters: Character[] = charactersData ?? []
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -22,7 +29,7 @@ export default async function CreatePage() {
         <p className="text-gray-400 mb-8">
           Describe the humanoid you want to design.
         </p>
-        <CreateForm />
+        <CreateForm characters={characters} />
       </div>
     </main>
   )
