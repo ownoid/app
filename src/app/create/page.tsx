@@ -7,6 +7,8 @@ export const metadata = {
   description: 'Design your humanoid with AI.',
 }
 
+type TraitRow = { label: string; value: string }
+
 export default async function CreatePage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -17,10 +19,18 @@ export default async function CreatePage() {
 
   const { data: charactersData } = await supabase
     .from('characters')
-    .select('id, name')
+    .select('id, name, distinctive_traits')
     .order('updated_at', { ascending: false })
 
-  const characters: Character[] = charactersData ?? []
+  const characters: Character[] = (charactersData ?? []).map((c) => {
+    const raw = c.distinctive_traits
+    const traits: TraitRow[] = Array.isArray(raw) ? (raw as TraitRow[]) : []
+    return {
+      id: c.id as string,
+      name: c.name as string,
+      distinctive_traits: traits,
+    }
+  })
 
   return (
     <main className="min-h-screen bg-black text-white">
