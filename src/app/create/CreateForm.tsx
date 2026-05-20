@@ -49,7 +49,10 @@ export default function CreateForm({ characters }: Props) {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: effectivePrompt }),
+        body: JSON.stringify({
+          prompt: effectivePrompt,
+          character_id: characterId,
+        }),
       })
 
       const data = await res.json()
