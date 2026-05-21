@@ -2,6 +2,7 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import SignaturePaletteEditor from './SignaturePaletteEditor'
 
 export const metadata = {
   title: 'Character — Ownoid',
@@ -25,7 +26,6 @@ export default async function CharacterDetailPage({
   const { id } = params
   const supabase = createClient()
 
-  // 1) Auth guard (learning #32: full-stack next param)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -34,7 +34,6 @@ export default async function CharacterDetailPage({
     redirect(`/login?next=/characters/${id}`)
   }
 
-  // 2) Fetch character (RLS auto-filters; explicit null check = defense in depth)
   const { data: character, error: charError } = await supabase
     .from('characters')
     .select(
@@ -51,13 +50,18 @@ export default async function CharacterDetailPage({
     notFound()
   }
 
-  // 3) Safe jsonb → TraitRow[] conversion (learning #38)
+  // Safe jsonb → TraitRow[] (learning #38)
   const rawTraits = character.distinctive_traits
   const traits: TraitRow[] = Array.isArray(rawTraits)
     ? (rawTraits as TraitRow[])
     : []
 
-  // 4) Fetch generations linked to this character (RLS also filters to own rows)
+  // Safe text[] → string[] (palette is text[], may be null)
+  const rawPalette = character.signature_palette
+  const palette: string[] = Array.isArray(rawPalette)
+    ? (rawPalette as string[])
+    : []
+
   const { data: genData, error: genError } = await supabase
     .from('generations')
     .select('id, image_url, prompt, created_at')
@@ -113,6 +117,12 @@ export default async function CharacterDetailPage({
           </section>
         )}
 
+        {/* CP-6-c: signature_palette editor */}
+        <SignaturePaletteEditor
+          characterId={character.id}
+          initialPalette={palette}
+        />
+
         {/* CP-6-b: Generations linked to this character */}
         <section className="mb-10">
           {workCount > 0 ? (
@@ -159,7 +169,6 @@ export default async function CharacterDetailPage({
           )}
         </section>
 
-        {/* CP-6-c: signature_palette editor will go here */}
         {/* CP-6-d: Edit button will go here */}
       </div>
     </main>
