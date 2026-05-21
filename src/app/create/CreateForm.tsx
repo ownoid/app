@@ -50,8 +50,10 @@ export default function CreateForm({ characters }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: effectivePrompt,
+          prompt_raw: prompt,
+          prompt_effective: effectivePrompt,
           character_id: characterId,
+          traits_included: willPrepend,
         }),
       })
 
