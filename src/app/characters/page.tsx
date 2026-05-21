@@ -1,3 +1,4 @@
+// src/app/characters/page.tsx
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
@@ -13,6 +14,7 @@ type CharacterRow = {
   description: string | null
   created_at: string
   updated_at: string
+  generations: Array<{ image_url: string | null }>
 }
 
 export default async function CharactersPage() {
@@ -25,16 +27,30 @@ export default async function CharactersPage() {
     redirect('/login?next=/characters')
   }
 
+  // CP-6-e: nested select — each character's most recent generation (1)
   const { data, error } = await supabase
     .from('characters')
-    .select('id, name, description, created_at, updated_at')
+    .select(
+      `
+      id,
+      name,
+      description,
+      created_at,
+      updated_at,
+      generations (
+        image_url
+      )
+    `,
+    )
     .order('updated_at', { ascending: false })
+    .order('created_at', { foreignTable: 'generations', ascending: false })
+    .limit(1, { foreignTable: 'generations' })
 
   if (error) {
     console.error('Failed to load characters:', error)
   }
 
-  const characters: CharacterRow[] = data ?? []
+  const characters: CharacterRow[] = (data ?? []) as CharacterRow[]
   const hasCharacters = characters.length > 0
 
   return (
@@ -93,14 +109,24 @@ function CharacterGrid({ characters }: { characters: CharacterRow[] }) {
 
 function CharacterCard({ character }: { character: CharacterRow }) {
   const initial = character.name.trim().charAt(0).toUpperCase() || '?'
+  const thumbnailUrl = character.generations[0]?.image_url ?? null
 
   return (
     <Link
       href={`/characters/${character.id}`}
       className="block bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-600 hover:-translate-y-0.5 transition"
     >
-      <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-950 flex items-center justify-center">
-        <span className="text-5xl font-bold text-gray-700">{initial}</span>
+      <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-950 flex items-center justify-center overflow-hidden">
+        {thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={thumbnailUrl}
+            alt={character.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <span className="text-5xl font-bold text-gray-700">{initial}</span>
+        )}
       </div>
       <div className="p-4">
         <h3 className="text-lg font-semibold mb-1 truncate">{character.name}</h3>
