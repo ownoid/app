@@ -30,21 +30,41 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // 2. Parse and validate the body (prompt + optional character_id)
-  let prompt: string
+  // 2. Parse and validate body.
+  // Expected fields:
+  //  - prompt_raw       (string, required): user's original input
+  //  - prompt_effective (string, required): final prompt sent to AI (may include traits)
+  //  - character_id     (string | null, optional)
+  //  - traits_included  (boolean, required): whether traits were prepended
+  let promptRaw: string
+  let promptEffective: string
+  let traitsIncluded: boolean
   let rawCharacterId: unknown
   try {
     const body = (await request.json()) as {
-      prompt?: unknown
+      prompt_raw?: unknown
+      prompt_effective?: unknown
       character_id?: unknown
+      traits_included?: unknown
     }
-    if (typeof body.prompt !== 'string') {
+    if (
+      typeof body.prompt_raw !== 'string' ||
+      typeof body.prompt_effective !== 'string'
+    ) {
       return NextResponse.json(
         { error: 'Prompt is required.' },
         { status: 400 }
       )
     }
-    prompt = body.prompt.trim()
+    if (typeof body.traits_included !== 'boolean') {
+      return NextResponse.json(
+        { error: 'Invalid request body.' },
+        { status: 400 }
+      )
+    }
+    promptRaw = body.prompt_raw.trim()
+    promptEffective = body.prompt_effective.trim()
+    traitsIncluded = body.traits_included
     rawCharacterId = body.character_id
   } catch {
     return NextResponse.json(
@@ -53,23 +73,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (prompt.length === 0) {
+  if (promptRaw.length === 0 || promptEffective.length === 0) {
     return NextResponse.json(
       { error: 'Prompt cannot be empty.' },
       { status: 400 }
     )
   }
 
-  if (prompt.length > 500) {
+  // Effective prompt can be longer than raw (traits prepended)
+  if (promptEffective.length > 1000) {
     return NextResponse.json(
-      { error: 'Prompt is too long (max 500 characters).' },
+      { error: 'Prompt is too long.' },
       { status: 400 }
     )
   }
 
   // 2b. Validate character_id if provided.
-  // Optional: undefined or null means "no character". If provided, must be
-  // a string AND belong to the current user (RLS auto-filters non-owned rows).
   let characterId: string | null = null
   if (rawCharacterId !== undefined && rawCharacterId !== null) {
     if (typeof rawCharacterId !== 'string') {
@@ -94,8 +113,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!characterRow) {
-      // Row not found OR belongs to another user — RLS filters either way.
-      // Treat both as "no longer available" from this user's perspective.
       return NextResponse.json(
         {
           error:
@@ -108,7 +125,19 @@ export async function POST(request: NextRequest) {
     characterId = rawCharacterId
   }
 
-  // 3. Check that the Replicate token is configured
+  // 2c. Sanity check: traits_included = true must imply a character is selected.
+  // The client UI prevents this state, but never trust the client.
+  if (traitsIncluded && !characterId) {
+    return NextResponse.json(
+      {
+        error:
+          'Invalid request: traits cannot be included without a character.',
+      },
+      { status: 400 }
+    )
+  }
+
+  // 3. Replicate token check
   const replicateToken = process.env.REPLICATE_API_TOKEN
   if (!replicateToken) {
     console.error('REPLICATE_API_TOKEN is not configured.')
@@ -119,7 +148,6 @@ export async function POST(request: NextRequest) {
   }
 
   // 4. Call Replicate (flux-1.1-pro) in sync mode via the `Prefer: wait` header.
-  // Note: flux-1.1-pro does NOT accept `num_outputs` — it always generates one image.
   try {
     const replicateResponse = await fetch(
       'https://api.replicate.com/v1/models/black-forest-labs/flux-1.1-pro/predictions',
@@ -132,7 +160,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           input: {
-            prompt,
+            prompt: promptEffective,
             aspect_ratio: '1:1',
             output_format: 'webp',
             output_quality: 90,
@@ -169,7 +197,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (prediction.status === 'succeeded' && replicateImageUrl) {
-      // 5. Download the image from Replicate (URL expires in 1 hour — must persist it now).
+      // 5. Download the image from Replicate (URL expires in 1 hour — must persist now)
       const imageResponse = await fetch(replicateImageUrl)
       if (!imageResponse.ok) {
         console.error(
@@ -184,8 +212,6 @@ export async function POST(request: NextRequest) {
       const imageArrayBuffer = await imageResponse.arrayBuffer()
 
       // 6. Upload to Supabase Storage at <user_id>/<prediction_id>.webp
-      // RLS policy "Users can upload to their own folder" requires the first folder
-      // segment to equal auth.uid()::text — automatically satisfied by the server client.
       const filePath = `${user.id}/${prediction.id}.webp`
       const { error: uploadError } = await supabase.storage
         .from('generations')
@@ -202,26 +228,34 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // 7. Get the permanent public URL
+      // 7. Permanent public URL
       const { data: publicUrlData } = supabase.storage
         .from('generations')
         .getPublicUrl(filePath)
       const permanentImageUrl = publicUrlData.publicUrl
 
-      // 8. Save the generation to the database with the PERMANENT URL (not Replicate's).
-      // Best-effort: if DB insert fails, the image is already uploaded — log and continue.
-      const { error: insertError } = await supabase
-        .from('generations')
-        .insert({
-          user_id: user.id,
-          prompt,
-          image_url: permanentImageUrl,
-          prediction_id: prediction.id,
-          character_id: characterId,
-        })
+      // 8. Atomic INSERT via RPC — generation + creative_contribution in one transaction.
+      // If the RPC fails, BOTH inserts are rolled back automatically (PL/pgSQL transaction).
+      // The Storage image becomes orphan in that case — acceptable for beta; a future
+      // drift-check job can clean up orphans by listing storage and comparing to DB.
+      const { error: rpcError } = await supabase.rpc(
+        'create_generation_with_contribution',
+        {
+          p_prompt_raw: promptRaw,
+          p_prompt_effective: promptEffective,
+          p_image_url: permanentImageUrl,
+          p_prediction_id: prediction.id,
+          p_character_id: characterId,
+          p_traits_included: traitsIncluded,
+        }
+      )
 
-      if (insertError) {
-        console.error('Failed to save generation to DB:', insertError)
+      if (rpcError) {
+        console.error('Failed to save generation + contribution:', rpcError)
+        return NextResponse.json(
+          { error: 'Failed to save your generation. Please try again.' },
+          { status: 502 }
+        )
       }
 
       return NextResponse.json({
@@ -238,7 +272,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Still processing after the `Prefer: wait` timeout — possible for flux-1.1-pro (4–5s)
+    // Still processing after the `Prefer: wait` timeout
     return NextResponse.json(
       {
         error: 'Image generation is taking too long. Please try again.',
