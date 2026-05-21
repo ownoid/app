@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import SignaturePaletteEditor from './SignaturePaletteEditor'
+import EditableCharacterHeader from './EditableCharacterHeader'
 
 export const metadata = {
   title: 'Character — Ownoid',
@@ -50,13 +51,11 @@ export default async function CharacterDetailPage({
     notFound()
   }
 
-  // Safe jsonb → TraitRow[] (learning #38)
   const rawTraits = character.distinctive_traits
   const traits: TraitRow[] = Array.isArray(rawTraits)
     ? (rawTraits as TraitRow[])
     : []
 
-  // Safe text[] → string[] (palette is text[], may be null)
   const rawPalette = character.signature_palette
   const palette: string[] = Array.isArray(rawPalette)
     ? (rawPalette as string[])
@@ -85,37 +84,13 @@ export default async function CharacterDetailPage({
           ← Back to characters
         </Link>
 
-        <header className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight mb-3">
-            {character.name}
-          </h1>
-          {character.description && (
-            <p className="text-gray-300 text-lg leading-relaxed">
-              {character.description}
-            </p>
-          )}
-        </header>
-
-        {traits.length > 0 && (
-          <section className="mb-10">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3">
-              Distinctive traits
-            </h2>
-            <dl className="space-y-2">
-              {traits.map((t, i) => (
-                <div
-                  key={i}
-                  className="flex gap-4 px-4 py-3 rounded-lg bg-gray-900 border border-gray-800"
-                >
-                  <dt className="min-w-[140px] font-medium text-gray-400">
-                    {t.label}
-                  </dt>
-                  <dd className="text-white">{t.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
-        )}
+        {/* CP-6-d: editable header (name / description / traits) */}
+        <EditableCharacterHeader
+          characterId={character.id}
+          name={character.name}
+          description={character.description}
+          traits={traits}
+        />
 
         {/* CP-6-c: signature_palette editor */}
         <SignaturePaletteEditor
@@ -168,8 +143,6 @@ export default async function CharacterDetailPage({
             </div>
           )}
         </section>
-
-        {/* CP-6-d: Edit button will go here */}
       </div>
     </main>
   )
