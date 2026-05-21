@@ -1,7 +1,8 @@
+// src/app/characters/new/page.tsx
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import NewCharacterForm from './NewCharacterForm'
+import CharacterForm from '../CharacterForm'
 
 export const metadata = {
   title: 'New Character — Ownoid',
@@ -33,7 +34,7 @@ export default async function NewCharacterPage() {
         <p className="text-gray-400 mb-8">
           Define a distinctive humanoid. Refine and register over time.
         </p>
-        <NewCharacterForm />
+        <CharacterForm mode="create" />
       </div>
     </main>
   )
