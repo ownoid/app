@@ -3,7 +3,7 @@
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { createCharacter } from './actions'
+import { createCharacter, updateCharacter } from './actions'
 
 export type Trait = { label: string; value: string }
 
@@ -81,8 +81,16 @@ export default function CharacterForm(props: CharacterFormProps) {
           setError(result.error)
         }
       } else {
-        // CP-6-d-2: updateCharacter 호출 자리
-        setError('Edit mode is not yet implemented.')
+        const result = await updateCharacter(props.characterId, {
+          name: trimmedName,
+          description: description.trim() || null,
+          distinctive_traits: cleanTraits,
+        })
+        if (result.ok) {
+          props.onSaved?.()
+        } else {
+          setError(result.error)
+        }
       }
     })
   }
