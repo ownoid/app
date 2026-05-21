@@ -14,7 +14,7 @@ type CharacterRow = {
   description: string | null
   created_at: string
   updated_at: string
-  generations: Array<{ image_url: string | null }>
+  generations: Array<{ image_url: string | null; created_at: string }>
 }
 
 export default async function CharactersPage() {
@@ -27,7 +27,7 @@ export default async function CharactersPage() {
     redirect('/login?next=/characters')
   }
 
-  // CP-6-e: nested select — each character's most recent generation (1)
+  // CP-6-e: nested select — all generations per character (for thumbnail + count)
   const { data, error } = await supabase
     .from('characters')
     .select(
@@ -38,13 +38,13 @@ export default async function CharactersPage() {
       created_at,
       updated_at,
       generations (
-        image_url
+        image_url,
+        created_at
       )
     `,
     )
     .order('updated_at', { ascending: false })
     .order('created_at', { foreignTable: 'generations', ascending: false })
-    .limit(1, { foreignTable: 'generations' })
 
   if (error) {
     console.error('Failed to load characters:', error)
@@ -109,14 +109,16 @@ function CharacterGrid({ characters }: { characters: CharacterRow[] }) {
 
 function CharacterCard({ character }: { character: CharacterRow }) {
   const initial = character.name.trim().charAt(0).toUpperCase() || '?'
-  const thumbnailUrl = character.generations[0]?.image_url ?? null
+  const generations = character.generations
+  const thumbnailUrl = generations[0]?.image_url ?? null
+  const worksCount = generations.length
 
   return (
     <Link
       href={`/characters/${character.id}`}
       className="block bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-600 hover:-translate-y-0.5 transition"
     >
-      <div className="aspect-square bg-gradient-to-br from-gray-800 to-gray-950 flex items-center justify-center overflow-hidden">
+      <div className="relative aspect-square bg-gradient-to-br from-gray-800 to-gray-950 flex items-center justify-center overflow-hidden">
         {thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -127,9 +129,16 @@ function CharacterCard({ character }: { character: CharacterRow }) {
         ) : (
           <span className="text-5xl font-bold text-gray-700">{initial}</span>
         )}
+        {worksCount > 0 && (
+          <span className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm text-xs font-medium text-white border border-white/10">
+            {worksCount} {worksCount === 1 ? 'work' : 'works'}
+          </span>
+        )}
       </div>
       <div className="p-4">
-        <h3 className="text-lg font-semibold mb-1 truncate">{character.name}</h3>
+        <h3 className="text-lg font-semibold mb-1 truncate">
+          {character.name}
+        </h3>
         {character.description && (
           <p className="text-sm text-gray-400 line-clamp-2">
             {character.description}
