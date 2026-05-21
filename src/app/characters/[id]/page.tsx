@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import SignaturePaletteEditor from './SignaturePaletteEditor'
 import EditableCharacterHeader from './EditableCharacterHeader'
+import CreationLog, { CreationLogEntry } from './CreationLog'
 
 export const metadata = {
   title: 'Character — Ownoid',
@@ -17,6 +18,20 @@ type Generation = {
   image_url: string | null
   prompt: string | null
   created_at: string
+}
+
+// Shape of the nested supabase response for creative_contributions.
+// `generations` may come back as a single object or an array — handle both
+// defensively (Learning #38 spirit).
+type RawContribution = {
+  id: string
+  prompt_raw: string
+  traits_included: boolean
+  created_at: string
+  generations:
+    | { image_url: string | null }
+    | { image_url: string | null }[]
+    | null
 }
 
 export default async function CharacterDetailPage({
@@ -73,6 +88,39 @@ export default async function CharacterDetailPage({
 
   const works: Generation[] = (genData ?? []) as Generation[]
   const workCount = works.length
+
+  // CP-7-d: Load creative_contributions for this character + map to log entries.
+  const { data: contribData, error: contribError } = await supabase
+    .from('creative_contributions')
+    .select(
+      `
+      id,
+      prompt_raw,
+      traits_included,
+      created_at,
+      generations (
+        image_url
+      )
+    `
+    )
+    .eq('character_id_used', id)
+    .order('created_at', { ascending: false })
+
+  if (contribError) {
+    console.error('Failed to load creative contributions:', contribError)
+  }
+
+  const contribList = (contribData ?? []) as RawContribution[]
+  const logEntries: CreationLogEntry[] = contribList.map((c) => {
+    const gen = Array.isArray(c.generations) ? c.generations[0] : c.generations
+    return {
+      id: c.id,
+      prompt_raw: c.prompt_raw,
+      traits_included: c.traits_included,
+      created_at: c.created_at,
+      image_url: gen?.image_url ?? null,
+    }
+  })
 
   return (
     <main className="min-h-screen bg-black text-white">
@@ -143,6 +191,9 @@ export default async function CharacterDetailPage({
             </div>
           )}
         </section>
+
+        {/* CP-7-d: Creation log — visible "On the record" for beta users */}
+        <CreationLog entries={logEntries} />
       </div>
     </main>
   )
