@@ -121,7 +121,7 @@ export default function CreateForm({ characters }: Props) {
       <textarea
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
-        placeholder="e.g., A sleek humanoid robot with chrome plating and blue accents"
+        placeholder="e.g., A composed humanoid with sharp features, silver-grey hair, minimalist black turtleneck"
         rows={4}
         disabled={isLoading}
         className="w-full rounded-lg bg-gray-900 border border-gray-700 p-4 text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 resize-none disabled:opacity-50"
