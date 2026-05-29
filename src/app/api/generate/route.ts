@@ -147,6 +147,12 @@ export async function POST(request: NextRequest) {
     )
   }
 
+ // House style applied to every base generation: clean full-body humanoid.
+  // Stored prompts (promptRaw/promptEffective) stay clean — this is render plumbing only.
+  const BASE_STYLE =
+    'Full-body shot, head to toe, feet included. Standing upright in a relaxed natural pose, facing the camera. Photorealistic, sharp focus on the face, soft studio lighting, clean plain neutral background.'
+  const renderPrompt = `${promptEffective}. ${BASE_STYLE}`
+
   // 4. Call Replicate (flux-1.1-pro) in sync mode via the `Prefer: wait` header.
   try {
     const replicateResponse = await fetch(
@@ -160,8 +166,8 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           input: {
-            prompt: promptEffective,
-            aspect_ratio: '1:1',
+            prompt: renderPrompt,
+            aspect_ratio: '2:3',
             output_format: 'webp',
             output_quality: 90,
           },
