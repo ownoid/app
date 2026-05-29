@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
   const FRAMING =
     'Full-body photograph, the entire figure visible from head to toe with both feet and shoes shown, full-length wide shot, the whole standing body fits within the frame.'
   const STYLE =
-    'Standing upright in a relaxed natural pose, facing the camera. Photorealistic, soft studio lighting, clean plain neutral background.'
+    'Standing upright with arms relaxed at the sides, facing the camera. Photorealistic, soft studio lighting, clean plain neutral background.'
   const renderPrompt = `${FRAMING} ${promptEffective}. ${STYLE}`
 
   // 4. Call Replicate (flux-1.1-pro) in sync mode via the `Prefer: wait` header.
