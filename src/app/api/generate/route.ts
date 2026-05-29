@@ -149,9 +149,12 @@ export async function POST(request: NextRequest) {
 
  // House style applied to every base generation: clean full-body humanoid.
   // Stored prompts (promptRaw/promptEffective) stay clean — this is render plumbing only.
-  const BASE_STYLE =
-    'Full-body shot, head to toe, feet included. Standing upright in a relaxed natural pose, facing the camera. Photorealistic, sharp focus on the face, soft studio lighting, clean plain neutral background.'
-  const renderPrompt = `${promptEffective}. ${BASE_STYLE}`
+ // Lead with strong full-body framing so flux doesn't crop to a half-body portrait.
+  const FRAMING =
+    'Full-body photograph, the entire figure visible from head to toe with both feet and shoes shown, full-length wide shot, the whole standing body fits within the frame.'
+  const STYLE =
+    'Standing upright in a relaxed natural pose, facing the camera. Photorealistic, soft studio lighting, clean plain neutral background.'
+  const renderPrompt = `${FRAMING} ${promptEffective}. ${STYLE}`
 
   // 4. Call Replicate (flux-1.1-pro) in sync mode via the `Prefer: wait` header.
   try {
