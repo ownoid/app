@@ -150,12 +150,26 @@ export default async function CharacterDetailPage({
                 {workCount === 1 ? 'work' : 'works'}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {works.map((w) => (
+                {works.map((w, i) => (
                   <div
                     key={w.id}
-                    className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden"
+                    className="group relative rounded-2xl overflow-hidden transition duration-200 hover:-translate-y-1"
+                    style={{
+                      backgroundColor: '#141318',
+                      border: '1.5px solid #3a352a',
+                    }}
                   >
-                    <div className="aspect-square bg-gray-950">
+                    <div
+                      className="absolute top-3 right-3 z-10 text-xs font-medium px-2.5 py-1 rounded-full"
+                      style={{
+                        backgroundColor: 'rgba(10,10,12,0.75)',
+                        color: '#e8e4da',
+                        border: '1px solid #3a352a',
+                      }}
+                    >
+                      {i + 1} / {workCount}
+                    </div>
+                    <div className="aspect-[2/3] bg-gray-950">
                       {w.image_url && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -165,6 +179,10 @@ export default async function CharacterDetailPage({
                         />
                       )}
                     </div>
+                    <div
+                      className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition duration-200"
+                      style={{ border: '1.5px solid #F59E0B' }}
+                    />
                   </div>
                 ))}
               </div>
