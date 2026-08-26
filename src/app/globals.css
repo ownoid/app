@@ -1,3 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.work-card {
+  border: 2px solid #2a2620;
+  transition: border-color 0.2s ease;
+}
+.work-card:hover {
+  border-color: #F59E0B;
+}
