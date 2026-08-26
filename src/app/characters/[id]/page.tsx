@@ -1,4 +1,3 @@
-// src/app/characters/[id]/page.tsx
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
@@ -20,9 +19,6 @@ type Generation = {
   created_at: string
 }
 
-// Shape of the nested supabase response for creative_contributions.
-// `generations` may come back as a single object or an array — handle both
-// defensively (Learning #38 spirit).
 type RawContribution = {
   id: string
   prompt_raw: string
@@ -89,7 +85,6 @@ export default async function CharacterDetailPage({
   const works: Generation[] = (genData ?? []) as Generation[]
   const workCount = works.length
 
-  // CP-7-d: Load creative_contributions for this character + map to log entries.
   const { data: contribData, error: contribError } = await supabase
     .from('creative_contributions')
     .select(
@@ -123,7 +118,7 @@ export default async function CharacterDetailPage({
   })
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen text-white" style={{ backgroundColor: '#0a0a0c' }}>
       <div className="max-w-5xl mx-auto px-6 py-12">
         <Link
           href="/characters"
@@ -132,7 +127,6 @@ export default async function CharacterDetailPage({
           ← Back to characters
         </Link>
 
-        {/* CP-6-d: editable header (name / description / traits) */}
         <EditableCharacterHeader
           characterId={character.id}
           name={character.name}
@@ -140,17 +134,18 @@ export default async function CharacterDetailPage({
           traits={traits}
         />
 
-        {/* CP-6-c: signature_palette editor */}
         <SignaturePaletteEditor
           characterId={character.id}
           initialPalette={palette}
         />
 
-        {/* CP-6-b: Generations linked to this character */}
         <section className="mb-10">
           {workCount > 0 ? (
             <>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-4">
+              <h2
+                className="text-xs font-semibold uppercase tracking-[0.2em] mb-4"
+                style={{ color: '#F59E0B' }}
+              >
                 Consistent across {workCount}{' '}
                 {workCount === 1 ? 'work' : 'works'}
               </h2>
@@ -184,7 +179,8 @@ export default async function CharacterDetailPage({
               </p>
               <Link
                 href="/create"
-                className="px-5 py-2.5 rounded-lg bg-white text-black font-medium hover:bg-gray-200 transition"
+                className="px-5 py-2.5 rounded-lg font-medium transition"
+                style={{ backgroundColor: '#F59E0B', color: '#0a0a0c' }}
               >
                 Create a work →
               </Link>
@@ -192,7 +188,6 @@ export default async function CharacterDetailPage({
           )}
         </section>
 
-        {/* CP-7-d: Creation log — visible "On the record" for beta users */}
         <CreationLog entries={logEntries} />
       </div>
     </main>
