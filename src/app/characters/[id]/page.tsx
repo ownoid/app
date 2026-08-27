@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import SignaturePaletteEditor from './SignaturePaletteEditor'
 import EditableCharacterHeader from './EditableCharacterHeader'
 import CreationLog, { CreationLogEntry } from './CreationLog'
-import RefineBox from './RefineBox'
+import RefineBox, { RefineSource } from './RefineBox'
 
 export const metadata = {
   title: 'Character — Ownoid',
@@ -17,6 +17,7 @@ type Generation = {
   id: string
   image_url: string | null
   created_at: string
+  parent_generation_id: string | null
 }
 
 type RawContribution = {
@@ -74,7 +75,7 @@ export default async function CharacterDetailPage({
 
   const { data: genData, error: genError } = await supabase
     .from('generations')
-    .select('id, image_url, created_at')
+    .select('id, image_url, created_at, parent_generation_id')
     .eq('character_id', id)
     .order('created_at', { ascending: false })
 
@@ -85,10 +86,20 @@ export default async function CharacterDetailPage({
   const works: Generation[] = (genData ?? []) as Generation[]
   const workCount = works.length
 
-  // Phase 2.7-A: the most recent work is the edit target.
-  // Consecutive edits therefore chain automatically, which is exactly what
-  // we need to observe drift accumulation (learning #76).
-  const latestWork = works.length > 0 ? works[0] : null
+  // Phase 2.7-A: the user picks the starting point explicitly.
+  // A work with no parent is a base — it still holds full body information,
+  // which is what an outfit change needs.
+  const refineSources: RefineSource[] = works.map((w, i) => {
+    const isBase = w.parent_generation_id === null
+    const position = workCount - i
+    return {
+      id: w.id,
+      label: isBase
+        ? `Work ${position} — base`
+        : `Work ${position} — refined`,
+      isBase,
+    }
+  })
 
   const { data: contribData, error: contribError } = await supabase
     .from('creative_contributions')
@@ -185,7 +196,9 @@ export default async function CharacterDetailPage({
                 ))}
               </div>
 
-              {latestWork && <RefineBox parentGenerationId={latestWork.id} />}
+              {refineSources.length > 0 && (
+                <RefineBox sources={refineSources} />
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-gray-800 rounded-2xl">
