@@ -15,7 +15,6 @@ type TraitRow = { label: string; value: string }
 type Generation = {
   id: string
   image_url: string | null
-  prompt: string | null
   created_at: string
 }
 
@@ -74,7 +73,7 @@ export default async function CharacterDetailPage({
 
   const { data: genData, error: genError } = await supabase
     .from('generations')
-    .select('id, image_url, prompt, created_at')
+    .select('id, image_url, created_at')
     .eq('character_id', id)
     .order('created_at', { ascending: false })
 
