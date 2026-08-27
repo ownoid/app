@@ -3,25 +3,39 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+export type RefineSource = {
+  id: string
+  label: string
+  isBase: boolean
+}
+
 type RefineBoxProps = {
-  parentGenerationId: string
+  sources: RefineSource[]
 }
 
 /**
  * Phase 2.7-A — minimal refinement box (validation build).
- * Purpose: confirm flux-kontext-pro works end-to-end through our own pipeline.
+ * Now with explicit source selection: the parent image matters as much as
+ * the instruction, because editing a "covering" work (e.g. a long coat)
+ * forces the model to invent body information it can no longer see.
  * The real UI (chat + lineage tree) comes in 2.7-B.
  */
-export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
+export default function RefineBox({ sources }: RefineBoxProps) {
   const router = useRouter()
+  const [selectedId, setSelectedId] = useState<string>(
+    sources.length > 0 ? sources[0].id : ''
+  )
   const [instruction, setInstruction] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [resultUrl, setResultUrl] = useState<string | null>(null)
 
+  const selectedSource = sources.find((s) => s.id === selectedId) ?? null
+  const canSubmit =
+    !isSubmitting && instruction.trim().length > 0 && selectedId.length > 0
+
   async function handleSubmit() {
-    const trimmed = instruction.trim()
-    if (trimmed.length === 0 || isSubmitting) return
+    if (!canSubmit) return
 
     setIsSubmitting(true)
     setErrorMessage(null)
@@ -32,8 +46,8 @@ export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          parent_generation_id: parentGenerationId,
-          edit_instruction: trimmed,
+          parent_generation_id: selectedId,
+          edit_instruction: instruction.trim(),
         }),
       })
 
@@ -54,13 +68,20 @@ export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
 
       setResultUrl(data.imageUrl)
       setInstruction('')
-      // Refresh the server component so the new work appears in the grid.
       router.refresh()
     } catch {
       setErrorMessage('Network error. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const labelStyle = {
+    color: '#F59E0B',
+    fontSize: '11px',
+    letterSpacing: '0.2em',
+    textTransform: 'uppercase' as const,
+    marginBottom: '8px',
   }
 
   return (
@@ -73,22 +94,61 @@ export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
         marginTop: '16px',
       }}
     >
-      <p
+      <p style={{ ...labelStyle, marginBottom: '12px' }}>Refine a work</p>
+
+      <label
+        htmlFor="refine-source"
         style={{
-          color: '#F59E0B',
-          fontSize: '11px',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          marginBottom: '12px',
+          display: 'block',
+          color: '#8a8578',
+          fontSize: '12px',
+          marginBottom: '6px',
         }}
       >
-        Refine this work
-      </p>
+        Start from
+      </label>
+      <select
+        id="refine-source"
+        value={selectedId}
+        onChange={(event) => setSelectedId(event.target.value)}
+        disabled={isSubmitting}
+        style={{
+          width: '100%',
+          backgroundColor: '#0a0a0c',
+          border: '1px solid #2a2620',
+          borderRadius: '8px',
+          color: '#e8e4da',
+          padding: '10px 12px',
+          fontSize: '14px',
+          marginBottom: '14px',
+        }}
+      >
+        {sources.map((source) => (
+          <option key={source.id} value={source.id}>
+            {source.label}
+          </option>
+        ))}
+      </select>
+
+      {selectedSource && !selectedSource.isBase && (
+        <p
+          style={{
+            color: '#8a8578',
+            fontSize: '12px',
+            marginTop: '-6px',
+            marginBottom: '14px',
+            lineHeight: 1.5,
+          }}
+        >
+          Heads up: if this work hides part of the body, an outfit change has to
+          reinvent what it cannot see. Start from a base for outfit changes.
+        </p>
+      )}
 
       <textarea
         value={instruction}
         onChange={(event) => setInstruction(event.target.value)}
-        placeholder="Change the outfit to a long charcoal wool coat"
+        placeholder="Change the outfit to a fitted athletic set"
         rows={3}
         disabled={isSubmitting}
         style={{
@@ -109,26 +169,17 @@ export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
 
       <button
         onClick={handleSubmit}
-        disabled={isSubmitting || instruction.trim().length === 0}
+        disabled={!canSubmit}
         style={{
           marginTop: '12px',
-          backgroundColor:
-            isSubmitting || instruction.trim().length === 0
-              ? '#3a3630'
-              : '#F59E0B',
-          color:
-            isSubmitting || instruction.trim().length === 0
-              ? '#8a8578'
-              : '#0a0a0c',
+          backgroundColor: canSubmit ? '#F59E0B' : '#3a3630',
+          color: canSubmit ? '#0a0a0c' : '#8a8578',
           border: 'none',
           borderRadius: '8px',
           padding: '10px 20px',
           fontSize: '14px',
           fontWeight: 600,
-          cursor:
-            isSubmitting || instruction.trim().length === 0
-              ? 'not-allowed'
-              : 'pointer',
+          cursor: canSubmit ? 'pointer' : 'not-allowed',
         }}
       >
         {isSubmitting ? 'Refining…' : 'Refine'}
@@ -142,17 +193,7 @@ export default function RefineBox({ parentGenerationId }: RefineBoxProps) {
 
       {resultUrl && (
         <div style={{ marginTop: '16px' }}>
-          <p
-            style={{
-              color: '#F59E0B',
-              fontSize: '11px',
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}
-          >
-            Result
-          </p>
+          <p style={labelStyle}>Result</p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resultUrl}
