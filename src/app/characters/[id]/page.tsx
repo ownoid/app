@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import SignaturePaletteEditor from './SignaturePaletteEditor'
 import EditableCharacterHeader from './EditableCharacterHeader'
 import CreationLog, { CreationLogEntry } from './CreationLog'
+import RefineBox from './RefineBox'
 
 export const metadata = {
   title: 'Character — Ownoid',
@@ -83,6 +84,11 @@ export default async function CharacterDetailPage({
 
   const works: Generation[] = (genData ?? []) as Generation[]
   const workCount = works.length
+
+  // Phase 2.7-A: the most recent work is the edit target.
+  // Consecutive edits therefore chain automatically, which is exactly what
+  // we need to observe drift accumulation (learning #76).
+  const latestWork = works.length > 0 ? works[0] : null
 
   const { data: contribData, error: contribError } = await supabase
     .from('creative_contributions')
@@ -178,6 +184,8 @@ export default async function CharacterDetailPage({
                   </div>
                 ))}
               </div>
+
+              {latestWork && <RefineBox parentGenerationId={latestWork.id} />}
             </>
           ) : (
             <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-gray-800 rounded-2xl">
